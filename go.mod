@@ -1,3 +1,3 @@
-module rate-limiter
+module ratelimitdemo
 
 go 1.24.3

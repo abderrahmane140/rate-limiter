@@ -2,47 +2,43 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
+
+	"ratelimitdemo/ratelimit"
 )
 
-type Limiter struct {
-	limit       int           // max requests allowed per window
-	window      time.Duration //how long a window lasts. e.g. 10 * time.Second
-	count       int           // how many requests we've counted in the current window
-	windowStart time.Time     // when the current window began
-}
-
-func NewLimiter(limit int, window time.Duration) *Limiter {
-	return &Limiter{
-		limit:       limit,
-		window:      window,
-		count:       0,
-		windowStart: time.Now(),
-	}
-}
-
-func (l *Limiter) Allow() bool {
-	now := time.Now()	
-
-	if now.Sub(l.windowStart) >= l.window {
-		l.windowStart = now
-		l.count = 0
-	}
-
-	// Is there room left in this window?
-	if l.count < l.limit {
-		l.count++
-		return true
-	}
-	return false
-}
-
 func main() {
-	// Allow at most 3 requests per 5-second window
-	limiter := NewLimiter(3, 5*time.Second)
+	limiter := ratelimit.NewLimiter(3, 5*time.Second)
 
-	for i := 1; i <= 5; i++ {
-		allowed := limiter.Allow()
-		fmt.Printf("request %d: allowd = %v\n", i, allowed)
+	fmt.Println("--- Part 1: two independent keys ---")
+	for i := 1; i <= 4; i++ {
+		fmt.Printf("alice request %d: allowed = %v\n", i, limiter.Allow("alice"))
 	}
+	for i := 1; i <= 4; i++ {
+		fmt.Printf("bob   request %d: allowed = %v\n", i, limiter.Allow("bob"))
+	}
+
+	fmt.Println("\n--- Part 2: 50 concurrent requests for the same key ---")
+	// Fresh limiter so Part 1's usage doesn't affect this demo.
+	concurrentLimiter := ratelimit.NewLimiter(10, 5*time.Second)
+
+	var wg sync.WaitGroup // lets us wait for all goroutines to finish
+	var mu sync.Mutex     // guards our own `allowedCount` variable below
+	allowedCount := 0
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1) // tell the WaitGroup: "one more goroutine to wait for"
+		go func() {
+			defer wg.Done() // tell it: "this one is done" when we return
+			if concurrentLimiter.Allow("shared-key") {
+				mu.Lock()
+				allowedCount++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait() // block here until all 50 goroutines have called Done()
+
+	fmt.Printf("allowed %d out of 50 concurrent requests (limit was 10)\n", allowedCount)
 }
