@@ -1,3 +1,3 @@
-module ratelimitdemo
+module github.com/abderrahmane140/rate-limiter
 
-go 1.24.3
+go 1.21
