@@ -67,4 +67,4 @@ go test ./... -race
 
 ## License
 
-MIT
+[MIT](LICENSE)
